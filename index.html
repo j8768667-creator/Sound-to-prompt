@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0f1115">
+<title>Sound to Prompt</title>
+<style>
+:root{--bg:#0f1115;--card:#181b22;--card2:#1f232c;--line:#2a2f3a;--text:#eceff4;--dim:#9aa3b2;--accent:#7c9cff;--accent2:#5eead4;--warn:#fbbf24;--bad:#f87171}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;touch-action:manipulation;-webkit-text-size-adjust:100%}
+body{padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(48px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+.wrap{max-width:860px;margin:0 auto}
+h1{font-size:28px;margin:8px 0 2px;letter-spacing:-.01em}
+.sub{color:var(--dim);margin:0 0 18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
+.card h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin:0 0 12px}
+button,select,input,textarea{font:inherit;color:inherit;touch-action:manipulation}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.btn{flex:1 1 180px;min-height:48px;border-radius:12px;border:1px solid transparent;background:var(--accent);color:#0b1020;font-weight:600;padding:10px 16px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--text);border-color:var(--line)}
+.btn.rec{background:var(--bad);color:#210a0a}
+.btn.small{flex:0 0 auto;min-height:36px;padding:6px 14px;font-size:14px}
+.btn:disabled{opacity:.45}
+.status{margin-top:12px;color:var(--dim);font-size:15px;word-break:break-word}
+.status.err{color:var(--bad)}
+.bar{height:6px;background:var(--card2);border-radius:3px;overflow:hidden;margin-top:12px}
+#bar{height:100%;width:0;background:var(--accent);transition:width .15s}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.m{background:var(--card2);border-radius:12px;padding:10px 12px}
+.m .k{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+.m .v{font-size:20px;font-weight:650;margin:2px 0}
+.m .s{font-size:13px;color:var(--dim)}
+canvas{width:100%;height:150px;display:block;margin-top:14px;background:var(--card2);border-radius:12px}
+.legend{font-size:12px;color:var(--dim);margin-top:6px}
+.legend b{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:4px}
+.sec{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+.sec:last-child{border-bottom:0}
+.sec span:last-child{color:var(--dim);text-align:right}
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.f{display:flex;flex-direction:column;gap:4px;flex:1 1 200px}
+.f.narrow{flex:0 1 130px}
+.f label{font-size:13px;color:var(--dim)}
+input[type=text],input[type=password],input[type=number],select,textarea{width:100%;background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:16px}
+textarea{min-height:84px;resize:vertical;line-height:1.4}
+.out{margin-top:12px}
+.outhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+.outhead .t{font-weight:600}
+.cnt{font-size:12px;color:var(--dim);margin-left:8px;font-weight:400}
+.cnt.over{color:var(--bad)}
+.hint{font-size:13px;color:var(--dim);margin:8px 0 0}
+.chk{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--dim);margin-top:8px}
+.chk input{width:20px;height:20px}
+details{margin-top:12px}
+summary{cursor:pointer;color:var(--dim);font-size:14px;padding:6px 0}
+pre{white-space:pre-wrap;word-break:break-word;font-size:12px;background:var(--card2);border-radius:10px;padding:10px;margin:6px 0;max-height:300px;overflow:auto}
+.why{font-size:14px;color:var(--dim);margin-top:10px}
+.foot{color:var(--dim);font-size:13px;margin-top:6px}
+.vis{position:absolute;opacity:0;width:1px;height:1px;overflow:hidden;pointer-events:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Sound → Prompt</h1>
+  <p class="sub">Analyse a track on this device, then turn what was measured into a style prompt for music generators.</p>
+
+  <div class="card">
+    <h2>1 · Audio</h2>
+    <div class="row">
+      <button class="btn" id="pickBtn">Choose audio file</button>
+      <button class="btn ghost" id="recBtn">● Record from mic</button>
+    </div>
+    <input type="file" id="file" class="vis" tabindex="-1">
+    <div class="status" id="status">Nothing loaded yet. Audio is analysed on-device and never uploaded.</div>
+    <div class="bar" id="barWrap" hidden><div id="bar"></div></div>
+    <p class="hint">Files give the best results. The mic also picks up room sound, so use it for quiet, close sources. Up to the first 6 minutes of a file are analysed.</p>
+  </div>
+
+  <div id="results" hidden>
+    <div class="card">
+      <h2>2 · What was measured</h2>
+      <div class="grid" id="metrics"></div>
+      <canvas id="tl"></canvas>
+      <div class="legend"><b style="background:#7c9cff"></b>energy <b style="background:#5eead4;margin-left:10px"></b>brightness <span style="margin-left:10px">dashed lines = section changes</span></div>
+      <div id="sections" style="margin-top:10px"></div>
+      <details>
+        <summary>Raw measurements</summary>
+        <pre id="raw"></pre>
+        <button class="btn ghost small" id="copyRaw">Copy JSON</button>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2>3 · Prompt (offline, rule-based)</h2>
+      <div class="controls">
+        <div class="f"><label for="target">Generator</label>
+          <select id="target">
+            <option value="suno">Suno</option>
+            <option value="udio">Udio</option>
+            <option value="stable">Stable Audio / MusicGen</option>
+            <option value="generic">Generic</option>
+          </select></div>
+        <div class="f"><label for="vocals">Vocals</label>
+          <select id="vocals">
+            <option value="">Unspecified</option>
+            <option value="instrumental">Instrumental</option>
+            <option value="vocals">With vocals</option>
+          </select></div>
+        <div class="f narrow"><label for="maxChars">Trim short to (0 = off)</label>
+          <input type="number" id="maxChars" inputmode="numeric" min="0" max="2000" value="200"></div>
+      </div>
+      <div class="f"><label for="genre">Genre, instruments, extras (optional)</label>
+        <input type="text" id="genre" placeholder="e.g. indie folk, acoustic guitar, warm vocals" autocomplete="off" autocapitalize="off"></div>
+      <p class="hint">Describe the sound, not artists: most generators block artist names.</p>
+
+      <div class="out">
+        <div class="outhead"><span class="t">Short · style tags<span class="cnt" id="cShort"></span></span><button class="btn ghost small" data-copy="outShort">Copy</button></div>
+        <textarea id="outShort"></textarea>
+      </div>
+      <div class="out">
+        <div class="outhead"><span class="t">Long · description<span class="cnt" id="cLong"></span></span><button class="btn ghost small" data-copy="outLong">Copy</button></div>
+        <textarea id="outLong"></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>4 · Enhance with Claude (optional)</h2>
+      <p class="hint" style="margin-top:0">Sends only the measurements, your notes and the draft above (never the audio) to Anthropic's API using your own key. Needs internet.</p>
+      <div class="controls" style="margin-top:12px">
+        <div class="f"><label for="apiKey">Anthropic API key</label>
+          <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+        <div class="f"><label for="model">Model</label>
+          <select id="model">
+            <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (balanced)</option>
+            <option value="claude-haiku-5-5">Claude Haiku 5.5 (fastest)</option>
+            <option value="claude-opus-5-5">Claude Opus 5.5 (most capable)</option>
+          </select></div>
+      </div>
+      <label class="chk"><input type="checkbox" id="remember"> Remember key on this device (stored in this browser only)</label>
+      <div class="row" style="margin-top:12px"><button class="btn" id="aiBtn">Enhance with Claude</button></div>
+      <div class="status" id="aiStatus"></div>
+      <div id="aiOut" hidden>
+        <div class="out">
+          <div class="outhead"><span class="t">Short · style tags<span class="cnt" id="cAiShort"></span></span><button class="btn ghost small" data-copy="aiShort">Copy</button></div>
+          <textarea id="aiShort"></textarea>
+        </div>
+        <div class="out">
+          <div class="outhead"><span class="t">Long · description<span class="cnt" id="cAiLong"></span></span><button class="btn ghost small" data-copy="aiLong">Copy</button></div>
+          <textarea id="aiLong"></textarea>
+        </div>
+        <div class="out">
+          <div class="outhead"><span class="t">Exclude / negative styles</span><button class="btn ghost small" data-copy="aiExclude">Copy</button></div>
+          <textarea id="aiExclude" style="min-height:56px"></textarea>
+        </div>
+        <div class="why" id="aiWhy"></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="foot">Analysis is heuristic: tempo can land on half or double time, the key can land on the relative major or minor, and mood, genre and instrument calls are inferred rather than detected. Only analyse audio you have the rights to; the prompt describes style, not content.</p>
+</div>
+
+<script>
+// ==CORE_START==
+const FFT_N = 2048, HOP = 512, MAX_SEC = 360;
+const NOTE = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
+const KS_MAJ = [6.35,2.23,3.48,2.33,4.38,4.09,2.52,5.19,2.39,3.66,2.29,2.88];
+const KS_MIN = [6.33,2.68,3.52,5.38,2.60,3.53,2.54,4.75,3.98,2.69,3.34,3.17];
+const tick = () => new Promise(r => setTimeout(r, 0));
+
+function fmtTime(s){ s = Math.max(0, Math.round(s)); return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); }
+function clip(x){ return Math.max(-1, Math.min(1, x)); }
+function mean(a){ let s = 0; for (let i = 0; i < a.length; i++) s += a[i]; return a.length ? s/a.length : 0; }
+function stdev(a, m){ if (m === undefined) m = mean(a); let s = 0; for (let i = 0; i < a.length; i++) s += (a[i]-m)*(a[i]-m); return a.length ? Math.sqrt(s/a.length) : 0; }
+function pct(arr, p){
+  if (!arr.length) return 0;
+  const a = Float32Array.from(arr).sort();
+  const i = (a.length-1) * p / 100, lo = Math.floor(i), hi = Math.ceil(i);
+  return a[lo] + (a[hi]-a[lo]) * (i-lo);
+}
+function pearson(x, y){
+  const mx = mean(x), my = mean(y); let n = 0, dx = 0, dy = 0;
+  for (let i = 0; i < x.length; i++){ n += (x[i]-mx)*(y[i]-my); dx += (x[i]-mx)**2; dy += (y[i]-my)**2; }
+  return (dx > 0 && dy > 0) ? n / Math.sqrt(dx*dy) : 0;
+}
+
+function makeFFT(n){
+  const bits = Math.round(Math.log2(n));
+  const rev = new Uint16Array(n);
+  for (let i = 0; i < n; i++){ let r = 0, x = i; for (let b = 0; b < bits; b++){ r = (r<<1) | (x&1); x >>= 1; } rev[i] = r; }
+  const cosT = new Float32Array(n/2), sinT = new Float32Array(n/2);
+  for (let i = 0; i < n/2; i++){ cosT[i] = Math.cos(2*Math.PI*i/n); sinT[i] = -Math.sin(2*Math.PI*i/n); }
+  return function(re, im){
+    for (let i = 0; i < n; i++){ const j = rev[i]; if (j > i){ let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; } }
+    for (let size = 2; size <= n; size <<= 1){
+      const half = size >> 1, step = n / size;
+      for (let i = 0; i < n; i += size){
+        for (let j = i, k = 0; j < i + half; j++, k += step){
+          const l = j + half;
+          const tr = re[l]*cosT[k] - im[l]*sinT[k];
+          const ti = re[l]*sinT[k] + im[l]*cosT[k];
+          re[l] = re[j] - tr; im[l] = im[j] - ti; re[j] += tr; im[j] += ti;
+        }
+      }
+    }
+  };
+}
+
+function toAnalysisRate(data, sr){
+  const f = Math.max(1, Math.round(sr / 22050));
+  if (f === 1) return { data, sr };
+  const n = Math.floor(data.length / f), out = new Float32Array(n);
+  for (let i = 0; i < n; i++){ let s = 0; const o = i*f; for (let j = 0; j < f; j++) s += data[o+j]; out[i] = s / f; }
+  return { data: out, sr: sr / f };
+}
+
+function detrend(env, fr){
+  const T = env.length, o = new Float32Array(T);
+  const w = Math.max(3, Math.round(fr * 0.6));
+  const cs = new Float64Array(T+1);
+  for (let i = 0; i < T; i++) cs[i+1] = cs[i] + env[i];
+  for (let i = 0; i < T; i++){
+    const a = Math.max(0, i-w), b = Math.min(T, i+w+1);
+    const v = env[i] - (cs[b]-cs[a])/(b-a);
+    o[i] = v > 0 ? v : 0;
+  }
+  return o;
+}
+
+function autocorr(o, maxLag){
+  const T = o.length, ac = new Float32Array(maxLag+3);
+  let e = 0; for (let i = 0; i < T; i++) e += o[i]*o[i];
+  if (e <= 0) return ac;
+  for (let l = 0; l <= maxLag+2; l++){
+    let s = 0; for (let i = 0; i + l < T; i++) s += o[i]*o[i+l];
+    ac[l] = (s/(T-l)) / (e/T);
+  }
+  return ac;
+}
+
+function estimateTempo(o, fr){
+  const maxLag = Math.ceil(4*60*fr/50) + 4;
+  const ac = autocorr(o, maxLag);
+  const get = (l) => {
+    if (l < 1) return 0;
+    const i = Math.floor(l), f = l - i;
+    if (i + 2 >= ac.length) return 0;
+    const p0 = ac[i-1], p1 = ac[i], p2 = ac[i+1], p3 = ac[i+2];
+    return 0.5*((2*p1) + (-p0+p2)*f + (2*p0-5*p1+4*p2-p3)*f*f + (-p0+3*p1-3*p2+p3)*f*f*f);
+  };
+  const grid = [], raw = [];
+  for (let bpm = 50; bpm <= 220; bpm += 0.5){
+    const lag = 60*fr/bpm;
+    grid.push(bpm);
+    raw.push(Math.max(0, get(lag) + 0.5*get(2*lag) + 0.25*get(3*lag)));
+  }
+  let best = 0, bestW = -1;
+  for (let i = 0; i < grid.length; i++){
+    const prior = Math.exp(-0.5 * Math.pow(Math.log2(grid[i]/120)/0.8, 2));
+    const w = raw[i] * prior;
+    if (w > bestW){ bestW = w; best = i; }
+  }
+  const bpm = grid[best], rawBest = raw[best];
+  const conf = rawBest / (mean(raw) + 1e-9);
+  const label = conf >= 2.3 ? 'high' : conf >= 1.6 ? 'medium' : 'low';
+  let alt = null;
+  for (const c of [bpm/2, bpm*2]){
+    if (c < 50 || c > 220) continue;
+    const idx = Math.round((c-50)/0.5); let m = 0;
+    for (let d = -2; d <= 2; d++){ if (raw[idx+d] !== undefined) m = Math.max(m, raw[idx+d]); }
+    if (m >= 0.85*rawBest) alt = Math.round(c);
+  }
+  return { bpm, conf, label, alt, get };
+}
+
+function estimateKey(chromaSum){
+  const res = [];
+  for (let tonic = 0; tonic < 12; tonic++){
+    const maj = [], min = [];
+    for (let i = 0; i < 12; i++){ maj.push(KS_MAJ[(i - tonic + 12) % 12]); min.push(KS_MIN[(i - tonic + 12) % 12]); }
+    res.push({ tonic, mode: 'major', r: pearson(chromaSum, maj) });
+    res.push({ tonic, mode: 'minor', r: pearson(chromaSum, min) });
+  }
+  res.sort((a, b) => b.r - a.r);
+  return res;
+}
+
+function analyseStructure(win, S){
+  const none = (secs) => ({ sections: secs, boundaries: [] });
+  const secStats = (b) => {
+    const starts = [0].concat(b), ends = b.concat([S]), secs = [];
+    for (let i = 0; i < starts.length; i++){
+      let db = 0, cen = 0, n = 0;
+      for (let s = starts[i]; s < ends[i]; s++){ db += win.db[s]; cen += win.cen[s]; n++; }
+      secs.push({ start: starts[i], end: ends[i], db: n ? db/n : 0, cen: n ? cen/n : 0 });
+    }
+    return secs;
+  };
+  if (S < 30) return none(secStats([]));
+  const chans = [win.db, win.cen, win.low, win.flux], Z = [];
+  for (const c of chans){ const m = mean(c), sd = stdev(c, m) || 1; Z.push(Array.from(c, v => (v-m)/sd)); }
+  const W = Math.min(8, Math.floor(S/5));
+  const nov = new Float32Array(S);
+  for (let s = W; s <= S - W; s++){
+    let d2 = 0;
+    for (let c = 0; c < 4; c++){
+      let a = 0, b = 0;
+      for (let j = 0; j < W; j++){ a += Z[c][s-1-j]; b += Z[c][s+j]; }
+      d2 += ((b-a)/W) ** 2;
+    }
+    nov[s] = Math.sqrt(d2);
+  }
+  const inner = Array.from(nov.subarray(W, S - W + 1));
+  const thr = mean(inner) + 0.8 * stdev(inner);
+  const cands = [];
+  for (let s = Math.max(W, 8); s <= Math.min(S - W, S - 8); s++){
+    if (nov[s] > thr && nov[s] >= nov[s-1] && nov[s] > nov[s+1]) cands.push(s);
+  }
+  cands.sort((a, b) => nov[b] - nov[a]);
+  const acc = [];
+  for (const s of cands){ if (acc.length >= 8) break; if (acc.every(a => Math.abs(a - s) >= 10)) acc.push(s); }
+  acc.sort((a, b) => a - b);
+  return { sections: secStats(acc), boundaries: acc };
+}
+
+function describeArc(secs, S, winDb){
+  const n = secs.length;
+  const dbs = secs.map(s => s.db), range = Math.max(...dbs) - Math.min(...dbs);
+  secs.forEach(s => {
+    if (n <= 1 || range < 3) s.level = 'steady';
+    else { const rel = (s.db - Math.min(...dbs)) / (range + 1e-6); s.level = rel < 0.33 ? 'low' : rel < 0.66 ? 'medium' : 'high'; }
+  });
+  const lv = { steady: 1, low: 0, medium: 1, high: 2 };
+  let base, tag;
+  if (n <= 1 || range < 3){ base = 'steady, consistent energy'; tag = null; }
+  else {
+    const first = secs[0], last = secs[n-1];
+    let pk = 0; secs.forEach((s, i) => { if (s.db > secs[pk].db) pk = i; });
+    const pos = (secs[pk].start + secs[pk].end) / 2 / S;
+    if ((lv[first.level] === 0 && lv[last.level] === 2) || (pos > 0.65 && lv[first.level] <= 1)){ base = 'builds gradually toward a climax'; tag = 'gradual build'; }
+    else if (lv[first.level] === 2 && lv[last.level] <= 1){ base = 'opens strong and winds down'; tag = 'winds down'; }
+    else if (lv[first.level] <= 1 && lv[last.level] <= 1 && pos > 0.25 && pos < 0.75){ base = 'arch-shaped, building to a peak then settling'; tag = 'builds to a peak'; }
+    else { base = 'dynamic, with contrasting loud and quiet sections'; tag = 'dynamic contrasts'; }
+  }
+  const intro = (n > 1 && secs[0].level === 'low' && secs[0].end - secs[0].start >= 8) ? 'quiet, sparse intro' : null;
+  let outro = null;
+  if (S >= 20){
+    const tail = mean(winDb.slice(-8)), med = pct(winDb, 50);
+    if (tail < med - 6) outro = 'fades out at the end';
+  }
+  return { base, tag, intro, outro, count: n };
+}
+
+async function analyse(sig, onProgress){
+  const ds = toAnalysisRate(sig.data, sig.sr);
+  let data = ds.data; const sr = ds.sr;
+  const maxLen = Math.floor(MAX_SEC * sr);
+  const truncated = data.length > maxLen;
+  if (truncated) data = data.subarray(0, maxLen);
+  const duration = data.length / sr;
+  if (duration < 3) throw new Error('That clip is too short. Use at least 3 seconds of audio (20+ seconds gives better results).');
+  const nF = Math.floor((data.length - FFT_N) / HOP) + 1, fr = sr / HOP;
+  const fft = makeFFT(FFT_N);
+  const win = new Float32Array(FFT_N); for (let i = 0; i < FFT_N; i++) win[i] = 0.5 - 0.5*Math.cos(2*Math.PI*i/(FFT_N-1));
+  const re = new Float32Array(FFT_N), im = new Float32Array(FFT_N);
+  const H = FFT_N/2 + 1, binHz = sr / FFT_N;
+  const mag = new Float32Array(H), prevLog = new Float32Array(H);
+  const rmsA = new Float32Array(nF), fluxA = new Float32Array(nF), cenA = new Float32Array(nF), rolA = new Float32Array(nF);
+  const flatA = new Float32Array(nF), lowA = new Float32Array(nF), highA = new Float32Array(nF), subA = new Float32Array(nF);
+  const chroma = new Float32Array(nF * 12);
+  const kFlux = Math.min(H-1, Math.floor(8000/binHz));
+  const kLoC = Math.max(2, Math.ceil(130/binHz)), kHiC = Math.min(H-2, Math.floor(4000/binHz));
+  const k200 = Math.floor(200/binHz), k80 = Math.floor(80/binHz), k4k = Math.ceil(4000/binHz);
+  const kF0 = Math.ceil(200/binHz), kF1 = Math.min(H-1, Math.floor(8000/binHz));
+  const norm = 4 / FFT_N;
+
+  for (let t = 0; t < nF; t++){
+    const o = t * HOP; let e = 0;
+    for (let i = 0; i < FFT_N; i++){ const x = data[o+i]; e += x*x; re[i] = x*win[i]; im[i] = 0; }
+    rmsA[t] = Math.sqrt(e / FFT_N);
+    fft(re, im);
+    let sum = 0, wsum = 0, tot2 = 0, low2 = 0, high2 = 0, sub2 = 0, flux = 0, lsum = 0, asum = 0, mxC = 0;
+    for (let k = 0; k < H; k++){
+      const m = Math.sqrt(re[k]*re[k] + im[k]*im[k]) * norm; mag[k] = m;
+      sum += m; wsum += m * k * binHz;
+      const m2 = m*m; tot2 += m2;
+      if (k < k200) low2 += m2;
+      if (k < k80) sub2 += m2;
+      if (k >= k4k) high2 += m2;
+      if (k <= kFlux){ const lg = Math.log(1 + 100*m), d = lg - prevLog[k]; if (d > 0) flux += d; prevLog[k] = lg; }
+      if (k >= kF0 && k <= kF1){ lsum += Math.log(m + 1e-7); asum += m; }
+      if (k >= kLoC && k <= kHiC && m > mxC) mxC = m;
+    }
+    fluxA[t] = flux;
+    cenA[t] = sum > 1e-9 ? wsum / sum : 0;
+    let acc = 0, rol = 0; const tgt = 0.85 * sum;
+    for (let k = 0; k < H; k++){ acc += mag[k]; if (acc >= tgt){ rol = k * binHz; break; } }
+    rolA[t] = rol;
+    const cnt = kF1 - kF0 + 1;
+    flatA[t] = asum > 1e-9 ? Math.exp(lsum / cnt) / (asum / cnt + 1e-9) : 0;
+    lowA[t] = tot2 > 1e-12 ? low2 / tot2 : 0;
+    subA[t] = tot2 > 1e-12 ? sub2 / tot2 : 0;
+    highA[t] = tot2 > 1e-12 ? high2 / tot2 : 0;
+    const thr = mxC * 0.1;
+    for (let k = kLoC; k <= kHiC; k++){
+      const m = mag[k];
+      if (m > thr && m > mag[k-1] && m >= mag[k+1]){
+        const a = Math.log(mag[k-1] + 1e-9), b = Math.log(m + 1e-9), c = Math.log(mag[k+1] + 1e-9);
+        const den = a - 2*b + c; let d = den !== 0 ? 0.5*(a-c)/den : 0; d = Math.max(-0.5, Math.min(0.5, d));
+        const f = (k + d) * binHz, midi = 69 + 12*Math.log2(f/440);
+        chroma[t*12 + (((Math.round(midi) % 12) + 12) % 12)] += m;
+      }
+    }
+    if (t % 200 === 199){ if (onProgress) onProgress(t / nF); await tick(); }
+  }
+  if (onProgress) onProgress(1);
+
+  const dbF = new Float32Array(nF); for (let t = 0; t < nF; t++) dbF[t] = 20*Math.log10(rmsA[t] + 1e-9);
+  const ref = pct(dbF, 95);
+  const active = new Uint8Array(nF); let nAct = 0;
+  for (let t = 0; t < nF; t++){ if (dbF[t] > ref - 40 && dbF[t] > -75){ active[t] = 1; nAct++; } }
+  if (nAct < 10) throw new Error('That audio looks silent or almost silent.');
+
+  const avg = (arr) => { let s = 0; for (let t = 0; t < nF; t++) if (active[t]) s += arr[t]; return s / nAct; };
+  const centroid = avg(cenA), rolloff = avg(rolA), flatness = avg(flatA), lowRatio = avg(lowA), subRatio = avg(subA), highRatio = avg(highA);
+
+  let e2 = 0; for (let t = 0; t < nF; t++) e2 += rmsA[t]*rmsA[t];
+  const loudnessDb = 10*Math.log10(e2/nF + 1e-12);
+  let peak = sig.peak; if (peak == null){ peak = 0; for (let i = 0; i < data.length; i++){ const a = Math.abs(data[i]); if (a > peak) peak = a; } }
+  const peakDb = 20*Math.log10(peak + 1e-9);
+
+  // key
+  const chromaSum = new Float64Array(12);
+  for (let t = 0; t < nF; t++){
+    if (!active[t]) continue;
+    let s = 0; for (let p = 0; p < 12; p++) s += chroma[t*12+p];
+    if (s > 1e-6) for (let p = 0; p < 12; p++) chromaSum[p] += chroma[t*12+p] / s;
+  }
+  const kr = estimateKey(Array.from(chromaSum));
+  const margin = kr[0].r - kr[1].r;
+  const key = {
+    name: NOTE[kr[0].tonic], tonic: kr[0].tonic, mode: kr[0].mode, r: kr[0].r,
+    label: (kr[0].r > 0.8 && margin > 0.05) ? 'confident' : kr[0].r > 0.65 ? 'fair' : 'uncertain',
+    alt: margin < 0.05 ? NOTE[kr[1].tonic] + ' ' + kr[1].mode : null
+  };
+
+  // rhythm
+  const o = detrend(fluxA, fr);
+  const tempo = estimateTempo(o, fr);
+  const b = 60 * fr / tempo.bpm, g = tempo.get;
+  const a1 = g(b*0.5), a2 = g(b*2/3), a3 = g(b/3);
+  const triplet = (a2 + a3)/2 > a1 * 1.0 && a2 > 0.05;
+  const triple = g(3*b) > g(2*b) * 1.15 && g(3*b) > g(4*b) * 1.15 && g(3*b) > 0.05;
+  const om = mean(o), osd = stdev(o, om), othr = om + 0.8*osd;
+  let onsets = 0, last = -10;
+  for (let i = 1; i < nF - 1; i++){ if (o[i] > othr && o[i] >= o[i-1] && o[i] > o[i+1] && i - last >= 3){ onsets++; last = i; } }
+  const density = onsets / duration;
+  const fluxAct = []; for (let t = 0; t < nF; t++) if (active[t]) fluxAct.push(fluxA[t]);
+  const sharpness = pct(fluxAct, 95) / (mean(fluxAct) + 1e-9);
+
+  // per-second windows
+  const S = Math.floor(nF / fr);
+  const wdb = new Float32Array(S), wcen = new Float32Array(S), wlow = new Float32Array(S), wflux = new Float32Array(S);
+  for (let s = 0; s < S; s++){
+    const a = Math.round(s*fr), z = Math.min(nF, Math.round((s+1)*fr)); let r2 = 0, cw = 0, cs = 0, lw = 0, fl = 0, n = 0;
+    for (let t = a; t < z; t++){ r2 += rmsA[t]*rmsA[t]; cw += rmsA[t]; cs += cenA[t]*rmsA[t]; lw += lowA[t]; fl += fluxA[t]; n++; }
+    wdb[s] = 10*Math.log10(r2/Math.max(1,n) + 1e-12);
+    wcen[s] = cw > 1e-9 ? cs/cw : 0; wlow[s] = lw/Math.max(1,n); wflux[s] = fl/Math.max(1,n);
+  }
+  let dynamicsDb = null;
+  if (S >= 6){
+    let mx = -200; for (let s = 0; s < S; s++) if (wdb[s] > mx) mx = wdb[s];
+    const valid = []; for (let s = 0; s < S; s++) if (wdb[s] > mx - 45) valid.push(wdb[s]);
+    dynamicsDb = pct(valid, 95) - pct(valid, 10);
+  }
+  const st = analyseStructure({ db: wdb, cen: wcen, low: wlow, flux: wflux }, S);
+  const arc = describeArc(st.sections, S, Array.from(wdb));
+  const dLo = pct(wdb, 5), dHi = pct(wdb, 100), cLo = pct(wcen, 5), cHi = pct(wcen, 95);
+  const curves = {
+    energy: Array.from(wdb, v => Math.max(0, Math.min(1, (v-dLo)/((dHi-dLo)||1)))),
+    bright: Array.from(wcen, v => Math.max(0, Math.min(1, (v-cLo)/((cHi-cLo)||1))))
+  };
+  const medCen = pct(wcen, 50);
+  st.sections.forEach(s => { s.bright = s.cen > medCen*1.15 ? 'brighter' : s.cen < medCen*0.85 ? 'darker' : ''; });
+
+  return {
+    duration, truncated, sr,
+    tempo: { bpm: Math.round(tempo.bpm), confidence: tempo.conf, label: tempo.label, alt: tempo.alt },
+    key, loudnessDb, peakDb, dynamicsDb, centroid, rolloff, flatness, lowRatio, subRatio, highRatio,
+    density, perBeat: density / (tempo.bpm/60), sharpness,
+    swing: triplet, triple, stereoWidth: sig.stereoWidth == null ? null : sig.stereoWidth,
+    sections: st.sections, boundaries: st.boundaries, arc, curves, S
+  };
+}
+
+function describe(f){
+  const bpm = f.tempo.bpm, d = {};
+  d.tempoWord = bpm < 60 ? 'very slow' : bpm < 80 ? 'slow' : bpm < 100 ? 'relaxed mid-tempo' : bpm < 120 ? 'mid-tempo' : bpm < 140 ? 'upbeat' : bpm < 170 ? 'fast' : 'very fast';
+  const arousal = 0.4*clip((bpm-100)/50) + 0.3*clip((f.loudnessDb+14)/6) + 0.3*clip((f.density-3)/3);
+  const valence = (f.key.mode === 'major' ? 0.5 : -0.5) + 0.5*clip((f.centroid-2000)/1500);
+  d.arousal = arousal; d.valence = valence;
+  if (arousal > 0.25) d.mood = valence > 0 ? ['energetic','upbeat','driving'] : ['intense','dark','driving'];
+  else if (arousal > -0.2) d.mood = valence > 0 ? ['warm','easygoing','groovy'] : ['moody','brooding','pensive'];
+  else d.mood = valence > 0 ? ['calm','gentle','dreamy'] : ['melancholic','somber','slow-burning'];
+  d.brightWord = f.centroid < 1300 ? 'dark' : f.centroid < 2300 ? 'warm' : f.centroid < 3500 ? 'bright' : 'very bright';
+  d.brightPhrase = f.centroid < 1300 ? 'dark and muffled in tone' : f.centroid < 2300 ? 'warm and balanced in tone' : f.centroid < 3500 ? 'bright in tone' : 'very bright, crisp and airy';
+  d.low = f.lowRatio > 0.5 ? 'bass-heavy' : f.lowRatio < 0.15 ? 'light low end' : null;
+  d.sub = f.subRatio > 0.12 ? 'deep sub bass' : null;
+  d.grit = f.flatness > 0.15 ? 'gritty, noisy texture' : f.flatness < 0.03 ? 'clean, tonal' : null;
+  d.air = f.highRatio > 0.04 ? 'airy highs' : null;
+  d.attack = f.sharpness > 5.5 ? 'punchy, percussive attacks' : f.sharpness < 3 ? 'smooth, sustained, soft attacks' : null;
+  d.attackTag = f.sharpness > 5.5 ? 'punchy' : f.sharpness < 3 ? 'smooth, sustained' : null;
+  d.texture = f.density < 1.5 ? 'sparse and spacious' : f.density < 4 ? 'moderately busy' : f.density < 7 ? 'busy and layered' : 'dense and intricate';
+  d.textureTag = f.density < 1.5 ? 'sparse' : f.density < 4 ? null : f.density < 7 ? 'layered' : 'dense';
+  d.dynamics = f.dynamicsDb == null ? null : f.dynamicsDb < 4 ? 'steady dynamics' : f.dynamicsDb < 9 ? 'moderate dynamics' : 'wide dynamics, with big quiet-to-loud contrast';
+  d.loudness = f.loudnessDb > -9 ? 'a loud, compressed, polished master' : f.loudnessDb > -14 ? 'a full, polished mix' : f.loudnessDb > -20 ? 'a moderate level' : 'a quiet, intimate level';
+  d.feel = f.swing ? 'swung, shuffle feel' : 'straight feel';
+  d.meter = f.triple ? 'triple meter (3/4 or 6/8)' : null;
+  d.stereo = f.stereoWidth == null ? null : f.stereoWidth > 0.5 ? 'wide stereo' : f.stereoWidth < 0.1 ? 'near-mono, intimate' : null;
+  return d;
+}
+
+function buildPrompt(f, o){
+  const d = describe(f), key = f.key.name + ' ' + f.key.mode;
+  const arcTags = [d_arcTag(f)].concat(f.arc.outro ? ['fade-out ending'] : []).filter(Boolean);
+  const genre = (o.genre || '').trim();
+  const tags = [
+    genre,
+    d.mood[0], d.mood[1],
+    f.tempo.bpm + ' BPM',
+    key,
+    d.tempoWord,
+    d.brightWord + ' tone',
+    d.textureTag,
+    d.attackTag,
+    o.vocals === 'instrumental' ? 'instrumental' : o.vocals === 'vocals' ? 'vocals' : null,
+    f.swing ? 'swung groove' : null,
+    arcTags[0],
+    d.low, d.sub, d.grit && d.grit.indexOf('gritty') === 0 ? 'gritty' : null,
+    d.dynamics && f.dynamicsDb >= 9 ? 'wide dynamics' : null,
+    d.stereo,
+    f.triple ? 'triple meter' : null,
+    arcTags[1],
+    d.mood[2]
+  ].filter(Boolean);
+  const seen = {}, uniq = tags.filter(t => { const k = t.toLowerCase(); if (seen[k]) return false; seen[k] = 1; return true; });
+  let short = '';
+  for (const t of uniq){
+    const next = short ? short + ', ' + t : t;
+    if (o.maxChars > 0 && next.length > o.maxChars) { if (!short) short = t.slice(0, o.maxChars); continue; }
+    short = next;
+  }
+  const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+  const s1 = (genre ? cap(genre) + ': a ' : 'A ') + d.mood.join(', ') + ' piece at about ' + f.tempo.bpm + ' BPM (' + d.tempoWord + ') in ' + key + ', with a ' + d.feel + (d.meter ? ' and ' + d.meter : '') + '.';
+  const sound = [d.brightPhrase, d.low, d.sub, d.grit, d.air].filter(Boolean);
+  const feelBits = [d.texture + ' texture', d.attack].filter(Boolean);
+  const s2 = 'The sound is ' + sound.join(', ') + '; the arrangement is ' + feelBits.join(' with ') + '.';
+  const dyn = [d.dynamics, 'sitting at ' + d.loudness, d.stereo].filter(Boolean);
+  const s3 = 'Production: ' + dyn.join(', ') + '.';
+  const arcBits = [f.arc.intro, f.arc.base, f.arc.outro].filter(Boolean);
+  const s4 = f.duration >= 20 ? 'Structure: ' + arcBits.join('; ') + (f.arc.count > 1 && f.arc.tag ? ' across ' + f.arc.count + ' sections' : '') + '.' : '';
+  const s5 = o.vocals === 'instrumental' ? 'Instrumental, no vocals.' : o.vocals === 'vocals' ? 'Features vocals.' : '';
+  return { short, long: [s1, s2, s3, s4, s5].filter(Boolean).join(' '), tags: uniq };
+}
+function d_arcTag(f){ return f.arc.tag; }
+// ==CORE_END==
+
+// ---------- UI ----------
+const $ = id => document.getElementById(id);
+let current = null, busy = false, rec = null, audioCtx = null;
+const TARGET_DEFAULT = { suno: 200, udio: 200, stable: 0, generic: 200 };
+
+function getCtx(){ if (!audioCtx){ const AC = window.AudioContext || window.webkitAudioContext; audioCtx = new AC(); } return audioCtx; }
+function setStatus(msg, err){ const s = $('status'); s.textContent = msg; s.className = 'status' + (err ? ' err' : ''); }
+function setBar(p){ const w = $('barWrap'); if (p == null){ w.hidden = true; return; } w.hidden = false; $('bar').style.width = Math.round(p*100) + '%'; }
+
+function readFile(file){
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error('Could not read the file.')); r.readAsArrayBuffer(file); });
+}
+function decodeWith(ctx, buf){
+  return new Promise((res, rej) => { const p = ctx.decodeAudioData(buf, res, rej); if (p && p.catch) p.catch(rej); });
+}
+async function decodeToMono(ab){
+  let buf = null;
+  try {
+    const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    buf = await decodeWith(new OAC(1, 1, 22050), ab.slice(0));
+  } catch (e) { buf = null; }
+  if (!buf) buf = await decodeWith(getCtx(), ab);
+  const n = buf.length, ch = buf.numberOfChannels, mono = new Float32Array(n);
+  let peak = 0;
+  for (let c = 0; c < ch; c++){
+    const d = buf.getChannelData(c);
+    for (let i = 0; i < n; i++){ const v = d[i]; mono[i] += v / ch; const a = v < 0 ? -v : v; if (a > peak) peak = a; }
+  }
+  let width = null;
+  if (ch >= 2){
+    const L = buf.getChannelData(0), R = buf.getChannelData(1); let m2 = 0, s2 = 0;
+    for (let i = 0; i < n; i++){ const m = (L[i]+R[i])/2, s = (L[i]-R[i])/2; m2 += m*m; s2 += s*s; }
+    width = Math.sqrt(s2 / (m2 + 1e-12));
+  }
+  return { data: mono, sr: buf.sampleRate, peak, stereoWidth: width };
+}
+
+async function runAnalysis(sig, label){
+  if (busy) return;
+  busy = true; $('pickBtn').disabled = true;
+  try {
+    setStatus('Analysing ' + label + '…'); setBar(0.02);
+    current = await analyse(sig, p => { setBar(p); setStatus('Analysing ' + label + '… ' + Math.round(p*100) + '%'); });
+    setBar(null);
+    setStatus(label + ' · ' + fmtTime(current.duration) + (current.truncated ? ' (first ' + fmtTime(MAX_SEC) + ' analysed)' : ''));
+    $('results').hidden = false;
+    renderResults(); rebuildPrompt();
+    $('aiOut').hidden = true; $('aiStatus').textContent = '';
+    $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) { setBar(null); setStatus(e.message || String(e), true); }
+  finally { busy = false; $('pickBtn').disabled = false; }
+}
+
+$('pickBtn').addEventListener('click', () => { if (!busy) $('file').click(); });
+$('file').addEventListener('change', async () => {
+  const f = $('file').files[0]; if (!f || busy) return;
+  try {
+    setStatus('Decoding ' + f.name + '…'); setBar(0.02);
+    const ab = await readFile(f);
+    const sig = await decodeToMono(ab);
+    await runAnalysis(sig, f.name);
+  } catch (e) { setBar(null); setStatus('Could not decode that file (' + (e && e.message ? e.message : 'unsupported format') + '). Try MP3, M4A, WAV or AAC.', true); }
+  $('file').value = '';
+});
+
+// ---- recording ----
+$('recBtn').addEventListener('click', async () => {
+  if (rec){ stopRec(); return; }
+  if (busy) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    const c = getCtx(); if (c.state === 'suspended') await c.resume();
+    const src = c.createMediaStreamSource(stream), proc = c.createScriptProcessor(4096, 1, 1), mute = c.createGain();
+    mute.gain.value = 0; const chunks = [];
+    proc.onaudioprocess = e => { chunks.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
+    src.connect(proc); proc.connect(mute); mute.connect(c.destination);
+    rec = { stream, src, proc, mute, chunks, t0: performance.now() };
+    rec.timer = setInterval(() => {
+      const s = (performance.now() - rec.t0) / 1000;
+      setStatus('Recording… ' + fmtTime(s) + ' (tap Stop when done)');
+      if (s >= 180) stopRec();
+    }, 250);
+    $('recBtn').textContent = '■ Stop recording'; $('recBtn').classList.add('rec'); $('pickBtn').disabled = true;
+    setStatus('Recording… 0:00 (tap Stop when done)');
+  } catch (e) {
+    setStatus('Microphone unavailable: ' + (e && e.message ? e.message : 'permission denied') + '. Check that Safari is allowed to use the mic.', true);
+  }
+});
+function stopRec(){
+  const r = rec; rec = null; clearInterval(r.timer);
+  try { r.proc.disconnect(); r.src.disconnect(); r.mute.disconnect(); } catch (e) {}
+  r.stream.getTracks().forEach(t => t.stop());
+  $('recBtn').textContent = '● Record from mic'; $('recBtn').classList.remove('rec'); $('pickBtn').disabled = false;
+  let n = 0; r.chunks.forEach(c => n += c.length);
+  const data = new Float32Array(n); let o = 0; r.chunks.forEach(c => { data.set(c, o); o += c.length; });
+  let peak = 0; for (let i = 0; i < n; i++){ const a = Math.abs(data[i]); if (a > peak) peak = a; }
+  if (n / getCtx().sampleRate < 3){ setStatus('That recording was too short. Record at least 3 seconds (20+ is better).', true); return; }
+  runAnalysis({ data, sr: getCtx().sampleRate, peak, stereoWidth: null }, 'Recorded clip');
+}
+
+// ---- results ----
+function metric(k, v, s){ return '<div class="m"><div class="k">' + k + '</div><div class="v">' + v + '</div><div class="s">' + (s || '') + '</div></div>'; }
+function renderResults(){
+  const f = current, d = describe(f);
+  const m = [];
+  m.push(metric('Tempo', '~' + f.tempo.bpm + ' BPM', f.tempo.label + ' confidence' + (f.tempo.alt ? ' · could be ' + f.tempo.alt : '')));
+  m.push(metric('Key', f.key.name + ' ' + f.key.mode, f.key.label + (f.key.alt ? ' · or ' + f.key.alt : '')));
+  m.push(metric('Feel', f.swing ? 'Swung' : 'Straight', f.triple ? 'triple meter likely' : 'duple meter likely'));
+  m.push(metric('Mood', d.mood[0], d.mood.slice(1).join(', ')));
+  m.push(metric('Loudness', f.loudnessDb.toFixed(1) + ' dB', 'RMS · peak ' + f.peakDb.toFixed(1) + ' dB'));
+  m.push(metric('Dynamics', f.dynamicsDb == null ? 'n/a' : f.dynamicsDb.toFixed(1) + ' dB', f.dynamicsDb == null ? 'clip too short' : d.dynamics.split(',')[0]));
+  m.push(metric('Brightness', Math.round(f.centroid) + ' Hz', d.brightWord + ' (spectral centroid)'));
+  m.push(metric('Low end', Math.round(f.lowRatio*100) + '%', 'energy under 200 Hz' + (d.sub ? ' · deep sub' : '')));
+  m.push(metric('Density', f.density.toFixed(1) + '/s', d.texture + ' · ' + f.perBeat.toFixed(1) + ' per beat'));
+  m.push(metric('Attack', d.attackTag || 'mixed', d.attack ? d.attack : 'a blend of soft and sharp'));
+  if (f.stereoWidth != null) m.push(metric('Stereo', f.stereoWidth.toFixed(2), d.stereo || 'moderate width'));
+  m.push(metric('Length', fmtTime(f.duration), f.truncated ? 'first ' + fmtTime(MAX_SEC) + ' only' : f.arc.count + ' section' + (f.arc.count === 1 ? '' : 's')));
+  $('metrics').innerHTML = m.join('');
+  $('sections').innerHTML = f.sections.map(s =>
+    '<div class="sec"><span>' + fmtTime(s.start) + ' – ' + fmtTime(s.end) + '</span><span>' + s.level + ' energy' + (s.bright ? ' · ' + s.bright : '') + '</span></div>'
+  ).join('') + '<div class="sec"><span>Arc</span><span>' + [f.arc.intro, f.arc.base, f.arc.outro].filter(Boolean).join(' · ') + '</span></div>';
+  $('raw').textContent = JSON.stringify(compact(f), null, 2);
+  drawTimeline();
+}
+function drawTimeline(){
+  if (!current) return;
+  const f = current, cv = $('tl'), dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = 150;
+  if (!w) return;
+  cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr);
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const S = f.curves.energy.length; if (S < 2) return;
+  const padT = 10, padB = 20, ph = h - padT - padB, X = i => (i/(S-1))*w, Y = v => padT + (1-v)*ph;
+  g.beginPath(); g.moveTo(0, h-padB);
+  f.curves.energy.forEach((v, i) => g.lineTo(X(i), Y(v)));
+  g.lineTo(w, h-padB); g.closePath(); g.fillStyle = 'rgba(124,156,255,.35)'; g.fill();
+  g.beginPath(); f.curves.energy.forEach((v, i) => i ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v)));
+  g.strokeStyle = '#7c9cff'; g.lineWidth = 2; g.stroke();
+  g.beginPath(); f.curves.bright.forEach((v, i) => i ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v)));
+  g.strokeStyle = '#5eead4'; g.lineWidth = 1.5; g.stroke();
+  g.setLineDash([4, 4]); g.strokeStyle = 'rgba(236,239,244,.45)'; g.lineWidth = 1;
+  f.boundaries.forEach(b => { g.beginPath(); g.moveTo(X(b), padT); g.lineTo(X(b), h-padB); g.stroke(); });
+  g.setLineDash([]); g.fillStyle = '#9aa3b2'; g.font = '11px -apple-system, sans-serif';
+  const steps = 5;
+  for (let i = 0; i <= steps; i++){ const s = Math.round((S-1)*i/steps), x = Math.min(w-28, Math.max(2, X(s) - 10)); g.fillText(fmtTime(s), x, h-6); }
+}
+window.addEventListener('resize', drawTimeline);
+window.addEventListener('orientationchange', () => setTimeout(drawTimeline, 250));
+
+function compact(f){
+  const r = (x, dp) => { const p = Math.pow(10, dp === undefined ? 1 : dp); return Math.round(x*p)/p; };
+  const d = describe(f);
+  return {
+    duration_s: r(f.duration, 0), tempo_bpm: f.tempo.bpm, tempo_confidence: f.tempo.label, tempo_alternate_bpm: f.tempo.alt,
+    key: f.key.name + ' ' + f.key.mode, key_confidence: f.key.label, key_alternate: f.key.alt,
+    rhythm_feel: f.swing ? 'swung/shuffle likely' : 'straight', meter_guess: f.triple ? 'triple (3/4 or 6/8)' : 'duple/common time',
+    loudness_rms_dbfs: r(f.loudnessDb), peak_dbfs: r(f.peakDb), dynamic_range_db: f.dynamicsDb == null ? null : r(f.dynamicsDb),
+    spectral_centroid_hz: r(f.centroid, 0), spectral_rolloff85_hz: r(f.rolloff, 0), spectral_flatness: r(f.flatness, 3),
+    energy_below_200hz_pct: r(f.lowRatio*100, 0), energy_below_80hz_pct: r(f.subRatio*100, 0), energy_above_4khz_pct: r(f.highRatio*100, 1),
+    onsets_per_second: r(f.density), onsets_per_beat: r(f.perBeat), attack_sharpness: r(f.sharpness),
+    stereo_side_to_mid_ratio: f.stereoWidth == null ? null : r(f.stereoWidth, 2),
+    structure: { sections: f.sections.map(s => ({ start_s: s.start, end_s: s.end, energy: s.level, tone: s.bright || 'typical' })),
+      arc: [f.arc.intro, f.arc.base, f.arc.outro].filter(Boolean).join('; ') },
+    rule_based_reading: { mood_words: d.mood, tempo_word: d.tempoWord, tone: d.brightPhrase, texture: d.texture, attack: d.attack, loudness: d.loudness, dynamics: d.dynamics }
+  };
+}
+
+// ---- prompt builder ----
+function opts(){ return { genre: $('genre').value, vocals: $('vocals').value, maxChars: Math.max(0, parseInt($('maxChars').value, 10) || 0) }; }
+function updCount(taId, cId, limit){
+  const n = $(taId).value.length, c = $(cId); c.textContent = n + ' chars' + (limit > 0 ? ' / ' + limit : '');
+  c.className = 'cnt' + (limit > 0 && n > limit ? ' over' : '');
+}
+function rebuildPrompt(){
+  if (!current) return;
+  const o = opts(), p = buildPrompt(current, o);
+  $('outShort').value = p.short; $('outLong').value = p.long;
+  updCount('outShort', 'cShort', o.maxChars); updCount('outLong', 'cLong', 0);
+}
+['genre', 'vocals', 'maxChars'].forEach(id => { $(id).addEventListener('input', rebuildPrompt); $(id).addEventListener('change', rebuildPrompt); });
+$('target').addEventListener('change', () => { $('maxChars').value = TARGET_DEFAULT[$('target').value]; rebuildPrompt(); });
+$('outShort').addEventListener('input', () => updCount('outShort', 'cShort', opts().maxChars));
+$('outLong').addEventListener('input', () => updCount('outLong', 'cLong', 0));
+$('aiShort').addEventListener('input', () => updCount('aiShort', 'cAiShort', opts().maxChars));
+$('aiLong').addEventListener('input', () => updCount('aiLong', 'cAiLong', 0));
+
+async function copyText(text, btn){
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) {
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px';
+    document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0, ta.value.length);
+    try { document.execCommand('copy'); } catch (_) {} ta.remove();
+  }
+  if (btn){ const t = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = t; }, 1200); }
+}
+document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', () => copyText($(b.dataset.copy).value, b)));
+$('copyRaw').addEventListener('click', e => copyText($('raw').textContent, e.currentTarget));
+
+// ---- AI step ----
+function lsGet(k){ try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v){ try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
+(function initKey(){
+  if (lsGet('sp_remember') === '1'){ $('remember').checked = true; $('apiKey').value = lsGet('sp_key') || ''; }
+  const m = lsGet('sp_model'); if (m && [...$('model').options].some(o => o.value === m)) $('model').value = m;
+})();
+$('model').addEventListener('change', () => lsSet('sp_model', $('model').value));
+$('remember').addEventListener('change', () => { if (!$('remember').checked){ lsSet('sp_remember', null); lsSet('sp_key', null); } });
+
+const TARGET_NOTES = {
+  suno: "Target: Suno. 'short' goes in the Style of Music box: concise comma-separated tags (genre and sub-genre first, then mood, tempo, key, instruments, production).",
+  udio: "Target: Udio. 'short' is a comma-separated list of descriptive tags (genre, sub-genre, mood, instruments, production). Descriptive prompts work well.",
+  stable: "Target: text-to-music models such as Stable Audio or MusicGen. 'short' is a compact comma-separated description that includes 'NN BPM'; 'long' is a natural-language description of instruments, mood, tempo and production.",
+  generic: "Target: a generic text-to-music generator."
+};
+function systemPrompt(o){
+  return [
+    "You are an expert writer of prompts for AI music generators. You receive objective measurements taken from an audio recording (not the audio itself), a rule-based draft prompt, and optional notes from the user. Write prompts that would steer a generator toward music in a similar style.",
+    "Rules:",
+    "- Use only what the measurements and the user's notes support. Where you infer genre, instrumentation or era, stay plausible and prefer broader terms over invented specifics.",
+    "- Never include artist, band, producer, label or song names, or trademarked terms. Describe the sound instead.",
+    "- Use concrete musical language: genre and sub-genre, instruments, rhythm and groove, tempo, key and mode, mood, production character, arrangement arc.",
+    "- The measurements are heuristic. Tempo can be off by a factor of two, the key can be the relative major or minor, and the mood words are rule-based guesses. If tempo confidence is low or an alternate tempo is listed, word the prompt so it survives that ambiguity.",
+    "- The user's notes (genre, instruments, vocals) override your own inference.",
+    TARGET_NOTES[$('target').value],
+    "Return ONLY a JSON object (no markdown fences) with these keys:",
+    "\"short\": tag-style prompt, comma-separated" + (o.maxChars > 0 ? ", at most " + o.maxChars + " characters" : "") + ".",
+    "\"long\": a descriptive prompt of 2 to 4 sentences.",
+    "\"exclude\": a comma-separated list of styles or elements to exclude (empty string if none).",
+    "\"why\": one or two sentences on the key inferences you made and any caveats."
+  ].join("\n");
+}
+function parseAi(text){
+  const m = text.match(/\{[\s\S]*\}/);
+  if (m){ try { const j = JSON.parse(m[0]); return { short: String(j.short || ''), long: String(j.long || ''), exclude: String(j.exclude || ''), why: String(j.why || '') }; } catch (e) {} }
+  return { short: '', long: text.trim(), exclude: '', why: 'Claude did not return structured output, so the full reply is shown under Long.' };
+}
+$('aiBtn').addEventListener('click', async () => {
+  if (!current) return;
+  const key = $('apiKey').value.trim(), st = $('aiStatus');
+  if (!key){ st.textContent = 'Enter your Anthropic API key first.'; st.className = 'status err'; return; }
+  if ($('remember').checked){ lsSet('sp_remember', '1'); lsSet('sp_key', key); }
+  const o = opts(), draft = buildPrompt(current, o);
+  const payload = { generator: $('target').value, vocals: o.vocals || 'unspecified', user_notes: o.genre || '', short_length_limit: o.maxChars, measurements: compact(current), rule_based_draft: { short: draft.short, long: draft.long } };
+  $('aiBtn').disabled = true; st.className = 'status'; st.textContent = 'Asking Claude…';
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: $('model').value, max_tokens: 1200, system: systemPrompt(o), messages: [{ role: 'user', content: JSON.stringify(payload, null, 1) }] })
+    });
+    let data = null; try { data = await res.json(); } catch (e) {}
+    if (!res.ok){
+      const msg = data && data.error && data.error.message ? data.error.message : 'HTTP ' + res.status;
+      throw new Error(res.status === 401 ? 'The API key was rejected (' + msg + ').' : msg);
+    }
+    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+    const r = parseAi(text);
+    $('aiShort').value = r.short; $('aiLong').value = r.long; $('aiExclude').value = r.exclude; $('aiWhy').textContent = r.why ? 'Why: ' + r.why : '';
+    updCount('aiShort', 'cAiShort', o.maxChars); updCount('aiLong', 'cAiLong', 0);
+    $('aiOut').hidden = false; st.textContent = 'Done.';
+  } catch (e) {
+    const offline = e instanceof TypeError;
+    st.className = 'status err';
+    st.textContent = offline ? "Couldn't reach api.anthropic.com. Check your connection and try again." : 'Claude request failed: ' + (e.message || e);
+  } finally { $('aiBtn').disabled = false; }
+});
+
+// iPad: stop pinch/gesture zoom
+['gesturestart', 'gesturechange', 'gestureend'].forEach(ev => document.addEventListener(ev, e => e.preventDefault()));
+</script>
+</body>
+</html>

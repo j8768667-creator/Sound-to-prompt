@@ -100,6 +100,7 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:12px;background:var(--c
           <select id="target">
             <option value="suno">Suno</option>
             <option value="udio">Udio</option>
+            <option value="yue2">YuE2</option>
             <option value="stable">Stable Audio / MusicGen</option>
             <option value="generic">Generic</option>
           </select></div>
@@ -108,6 +109,8 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:12px;background:var(--c
             <option value="">Unspecified</option>
             <option value="instrumental">Instrumental</option>
             <option value="vocals">With vocals</option>
+            <option value="female">Female vocals</option>
+            <option value="male">Male vocals</option>
           </select></div>
         <div class="f narrow"><label for="maxChars">Trim short to (0 = off)</label>
           <input type="number" id="maxChars" inputmode="numeric" min="0" max="2000" value="200"></div>
@@ -115,6 +118,7 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:12px;background:var(--c
       <div class="f"><label for="genre">Genre, instruments, extras (optional)</label>
         <input type="text" id="genre" placeholder="e.g. indie folk, acoustic guitar, warm vocals" autocomplete="off" autocapitalize="off"></div>
       <p class="hint">Describe the sound, not artists: most generators block artist names.</p>
+      <p class="hint" id="targetHint"></p>
 
       <div class="out">
         <div class="outhead"><span class="t">Short · style tags<span class="cnt" id="cShort"></span></span><button class="btn ghost small" data-copy="outShort">Copy</button></div>
@@ -127,20 +131,49 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:12px;background:var(--c
     </div>
 
     <div class="card">
-      <h2>4 · Enhance with Claude (optional)</h2>
-      <p class="hint" style="margin-top:0">Sends only the measurements, your notes and the draft above (never the audio) to Anthropic's API using your own key. Needs internet.</p>
-      <div class="controls" style="margin-top:12px">
-        <div class="f"><label for="apiKey">Anthropic API key</label>
-          <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
-        <div class="f"><label for="model">Model</label>
-          <select id="model">
-            <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (balanced)</option>
-            <option value="claude-haiku-5-5">Claude Haiku 5.5 (fastest)</option>
-            <option value="claude-opus-5-5">Claude Opus 5.5 (most capable)</option>
+      <h2>4 · Enhance with AI (optional)</h2>
+      <div class="controls">
+        <div class="f"><label for="provider">AI service</label>
+          <select id="provider">
+            <option value="manual">No key: copy to any AI chat (free)</option>
+            <option value="gemini">Google Gemini (free key)</option>
+            <option value="groq">Groq (free key)</option>
+            <option value="openrouter">OpenRouter (free models)</option>
+            <option value="anthropic">Anthropic Claude (paid key)</option>
+            <option value="custom">Other OpenAI-compatible</option>
           </select></div>
       </div>
-      <label class="chk"><input type="checkbox" id="remember"> Remember key on this device (stored in this browser only)</label>
-      <div class="row" style="margin-top:12px"><button class="btn" id="aiBtn">Enhance with Claude</button></div>
+      <p class="hint" id="provHint" style="margin-top:0"></p>
+
+      <div id="manualBox">
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="copyReq">Copy request</button>
+        </div>
+        <p class="hint">Paste it into any chat app (Claude, ChatGPT, Gemini, etc.), then paste the reply below.</p>
+        <div class="row" style="margin-top:6px">
+          <a class="btn ghost small" href="https://claude.ai" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center">claude.ai</a>
+          <a class="btn ghost small" href="https://chatgpt.com" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center">ChatGPT</a>
+          <a class="btn ghost small" href="https://gemini.google.com" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center">Gemini</a>
+        </div>
+        <div class="f" style="margin-top:12px"><label for="pasteReply">AI reply</label>
+          <textarea id="pasteReply" placeholder="Paste the reply here (JSON or plain text)"></textarea></div>
+        <div class="row" style="margin-top:10px"><button class="btn ghost" id="useReply">Use reply</button></div>
+      </div>
+
+      <div id="keyBox" hidden>
+        <div class="controls" style="margin-top:12px">
+          <div class="f" id="urlWrap" hidden><label for="baseUrl">Base URL (ends in /v1)</label>
+            <input type="text" id="baseUrl" placeholder="https://api.example.com/v1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+          <div class="f"><label for="apiKey">API key</label>
+            <input type="password" id="apiKey" placeholder="paste key" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+          <div class="f"><label for="model">Model name</label>
+            <input type="text" id="model" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+        </div>
+        <p class="hint" style="margin-top:0">Model names change over time. If you get a "model not found" error, replace it with a current one from the provider's model list.</p>
+        <label class="chk"><input type="checkbox" id="remember"> Remember key on this device (stored in this browser only)</label>
+        <div class="row" style="margin-top:12px"><button class="btn" id="aiBtn">Enhance with AI</button></div>
+      </div>
+
       <div class="status" id="aiStatus"></div>
       <div id="aiOut" hidden>
         <div class="out">
@@ -157,6 +190,7 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:12px;background:var(--c
         </div>
         <div class="why" id="aiWhy"></div>
       </div>
+      <p class="hint">Only the measurements, your notes and the draft prompt are shared, never the audio. Free tiers may use submitted text to improve their products, so check the provider's terms.</p>
     </div>
   </div>
 
@@ -527,7 +561,19 @@ function buildPrompt(f, o){
   const d = describe(f), key = f.key.name + ' ' + f.key.mode;
   const arcTags = [d_arcTag(f)].concat(f.arc.outro ? ['fade-out ending'] : []).filter(Boolean);
   const genre = (o.genre || '').trim();
-  const tags = [
+  const vTag = ({ instrumental: 'instrumental', vocals: 'vocals', female: 'female vocals', male: 'male vocals' })[o.vocals] || null;
+  const yue = [
+    genre, vTag,
+    d.mood[0], d.mood[1],
+    f.tempo.bpm + ' BPM',
+    d.brightWord + ' tone',
+    d.textureTag, d.attackTag,
+    f.swing ? 'swung groove' : null,
+    d.low, d.sub,
+    f.triple ? 'triple meter' : null,
+    d.mood[2]
+  ].filter(Boolean);
+  const tags = o.target === 'yue2' ? yue : [
     genre,
     d.mood[0], d.mood[1],
     f.tempo.bpm + ' BPM',
@@ -536,7 +582,7 @@ function buildPrompt(f, o){
     d.brightWord + ' tone',
     d.textureTag,
     d.attackTag,
-    o.vocals === 'instrumental' ? 'instrumental' : o.vocals === 'vocals' ? 'vocals' : null,
+    vTag,
     f.swing ? 'swung groove' : null,
     arcTags[0],
     d.low, d.sub, d.grit && d.grit.indexOf('gritty') === 0 ? 'gritty' : null,
@@ -562,7 +608,7 @@ function buildPrompt(f, o){
   const s3 = 'Production: ' + dyn.join(', ') + '.';
   const arcBits = [f.arc.intro, f.arc.base, f.arc.outro].filter(Boolean);
   const s4 = f.duration >= 20 ? 'Structure: ' + arcBits.join('; ') + (f.arc.count > 1 && f.arc.tag ? ' across ' + f.arc.count + ' sections' : '') + '.' : '';
-  const s5 = o.vocals === 'instrumental' ? 'Instrumental, no vocals.' : o.vocals === 'vocals' ? 'Features vocals.' : '';
+  const s5 = ({ instrumental: 'Instrumental, no vocals.', vocals: 'Features vocals.', female: 'Features female vocals.', male: 'Features male vocals.' })[o.vocals] || '';
   return { short, long: [s1, s2, s3, s4, s5].filter(Boolean).join(' '), tags: uniq };
 }
 function d_arcTag(f){ return f.arc.tag; }
@@ -571,7 +617,14 @@ function d_arcTag(f){ return f.arc.tag; }
 // ---------- UI ----------
 const $ = id => document.getElementById(id);
 let current = null, busy = false, rec = null, audioCtx = null;
-const TARGET_DEFAULT = { suno: 200, udio: 200, stable: 0, generic: 200 };
+const TARGET_DEFAULT = { suno: 200, udio: 200, yue2: 200, stable: 0, generic: 200 };
+const TARGET_HINT = {
+  yue2: "YuE2 takes this in its Style field (language, vocals, genre, tempo, instruments). It also needs lyrics with [Verse]/[Chorus] tags, which this app doesn't write. Language and instruments can't be detected from audio, so add them in the box above. A long style prompt eats into the song's token budget.",
+  suno: "Paste the short version into Suno's style box.",
+  udio: "Paste the short version into Udio's prompt box.",
+  stable: "Text-to-music models usually do best with the long description plus a BPM.",
+  generic: ""
+};
 
 function getCtx(){ if (!audioCtx){ const AC = window.AudioContext || window.webkitAudioContext; audioCtx = new AC(); } return audioCtx; }
 function setStatus(msg, err){ const s = $('status'); s.textContent = msg; s.className = 'status' + (err ? ' err' : ''); }
@@ -735,7 +788,7 @@ function compact(f){
 }
 
 // ---- prompt builder ----
-function opts(){ return { genre: $('genre').value, vocals: $('vocals').value, maxChars: Math.max(0, parseInt($('maxChars').value, 10) || 0) }; }
+function opts(){ return { genre: $('genre').value, vocals: $('vocals').value, target: $('target').value, maxChars: Math.max(0, parseInt($('maxChars').value, 10) || 0) }; }
 function updCount(taId, cId, limit){
   const n = $(taId).value.length, c = $(cId); c.textContent = n + ' chars' + (limit > 0 ? ' / ' + limit : '');
   c.className = 'cnt' + (limit > 0 && n > limit ? ' over' : '');
@@ -747,7 +800,9 @@ function rebuildPrompt(){
   updCount('outShort', 'cShort', o.maxChars); updCount('outLong', 'cLong', 0);
 }
 ['genre', 'vocals', 'maxChars'].forEach(id => { $(id).addEventListener('input', rebuildPrompt); $(id).addEventListener('change', rebuildPrompt); });
-$('target').addEventListener('change', () => { $('maxChars').value = TARGET_DEFAULT[$('target').value]; rebuildPrompt(); });
+function showTargetHint(){ $('targetHint').textContent = TARGET_HINT[$('target').value] || ''; }
+$('target').addEventListener('change', () => { $('maxChars').value = TARGET_DEFAULT[$('target').value]; showTargetHint(); rebuildPrompt(); });
+showTargetHint();
 $('outShort').addEventListener('input', () => updCount('outShort', 'cShort', opts().maxChars));
 $('outLong').addEventListener('input', () => updCount('outLong', 'cLong', 0));
 $('aiShort').addEventListener('input', () => updCount('aiShort', 'cAiShort', opts().maxChars));
@@ -768,16 +823,44 @@ $('copyRaw').addEventListener('click', e => copyText($('raw').textContent, e.cur
 // ---- AI step ----
 function lsGet(k){ try { return localStorage.getItem(k); } catch (e) { return null; } }
 function lsSet(k, v){ try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
-(function initKey(){
-  if (lsGet('sp_remember') === '1'){ $('remember').checked = true; $('apiKey').value = lsGet('sp_key') || ''; }
-  const m = lsGet('sp_model'); if (m && [...$('model').options].some(o => o.value === m)) $('model').value = m;
+
+const PROVIDERS = {
+  manual:     { hint: "No account needed. Copy the request, paste it into any AI chat (the free tier of Claude, ChatGPT or Gemini works), then paste the reply back here." },
+  gemini:     { hint: "Google Gemini has a free tier. Get a key at aistudio.google.com (Google account, no card).", model: 'gemini-2.5-flash' },
+  groq:       { hint: "Groq has a free tier. Get a key at console.groq.com.", model: 'llama-3.3-70b-versatile', base: 'https://api.groq.com/openai/v1' },
+  openrouter: { hint: "OpenRouter lists free models (names ending in :free). Get a key at openrouter.ai.", model: 'meta-llama/llama-3.3-70b-instruct:free', base: 'https://openrouter.ai/api/v1' },
+  anthropic:  { hint: "Anthropic API keys are paid and separate from a claude.ai subscription.", model: 'claude-sonnet-5-5' },
+  custom:     { hint: "Any service with an OpenAI-style /chat/completions endpoint (a local server on your network, Mistral, Together, etc.). The service must allow browser requests.", model: '' }
+};
+function provId(){ return $('provider').value; }
+function applyProvider(){
+  const id = provId(), p = PROVIDERS[id], manual = id === 'manual';
+  $('provHint').textContent = p.hint;
+  $('manualBox').hidden = !manual; $('keyBox').hidden = manual; $('urlWrap').hidden = id !== 'custom';
+  if (!manual){
+    $('model').value = lsGet('sp_model_' + id) || p.model || '';
+    $('apiKey').value = lsGet('sp_remember') === '1' ? (lsGet('sp_key_' + id) || '') : '';
+    if (id === 'custom') $('baseUrl').value = lsGet('sp_base') || '';
+  }
+  $('aiStatus').textContent = ''; $('aiStatus').className = 'status';
+  lsSet('sp_provider', id);
+}
+(function initAi(){
+  const sp = lsGet('sp_provider'); if (sp && PROVIDERS[sp]) $('provider').value = sp;
+  $('remember').checked = lsGet('sp_remember') === '1';
+  applyProvider();
 })();
-$('model').addEventListener('change', () => lsSet('sp_model', $('model').value));
-$('remember').addEventListener('change', () => { if (!$('remember').checked){ lsSet('sp_remember', null); lsSet('sp_key', null); } });
+$('provider').addEventListener('change', applyProvider);
+$('model').addEventListener('change', () => lsSet('sp_model_' + provId(), $('model').value.trim()));
+$('remember').addEventListener('change', () => {
+  if ($('remember').checked) lsSet('sp_remember', '1');
+  else { lsSet('sp_remember', null); Object.keys(PROVIDERS).forEach(k => lsSet('sp_key_' + k, null)); }
+});
 
 const TARGET_NOTES = {
   suno: "Target: Suno. 'short' goes in the Style of Music box: concise comma-separated tags (genre and sub-genre first, then mood, tempo, key, instruments, production).",
   udio: "Target: Udio. 'short' is a comma-separated list of descriptive tags (genre, sub-genre, mood, instruments, production). Descriptive prompts work well.",
+  yue2: "Target: YuE2, an open lyrics-to-song model. 'short' is its Style field, written like: 'English, warm female vocal, contemporary pop, 96 BPM, piano, rounded electric bass, restrained drums, clear diction'. Cover language, vocal character, genre, tempo and instruments. Keep it compact (the style text uses up the song's token budget) and put no musical instructions in lyrics. If the user notes give no language, assume English and say so in 'why'.",
   stable: "Target: text-to-music models such as Stable Audio or MusicGen. 'short' is a compact comma-separated description that includes 'NN BPM'; 'long' is a natural-language description of instruments, mood, tempo and production.",
   generic: "Target: a generic text-to-music generator."
 };
@@ -790,47 +873,97 @@ function systemPrompt(o){
     "- Use concrete musical language: genre and sub-genre, instruments, rhythm and groove, tempo, key and mode, mood, production character, arrangement arc.",
     "- The measurements are heuristic. Tempo can be off by a factor of two, the key can be the relative major or minor, and the mood words are rule-based guesses. If tempo confidence is low or an alternate tempo is listed, word the prompt so it survives that ambiguity.",
     "- The user's notes (genre, instruments, vocals) override your own inference.",
-    TARGET_NOTES[$('target').value],
-    "Return ONLY a JSON object (no markdown fences) with these keys:",
+    TARGET_NOTES[o.target],
+    "Return ONLY a JSON object (no markdown fences, no commentary) with these keys:",
     "\"short\": tag-style prompt, comma-separated" + (o.maxChars > 0 ? ", at most " + o.maxChars + " characters" : "") + ".",
     "\"long\": a descriptive prompt of 2 to 4 sentences.",
     "\"exclude\": a comma-separated list of styles or elements to exclude (empty string if none).",
     "\"why\": one or two sentences on the key inferences you made and any caveats."
   ].join("\n");
 }
+function userPayload(o){
+  const draft = buildPrompt(current, o);
+  return JSON.stringify({ generator: o.target, vocals: o.vocals || 'unspecified', user_notes: o.genre || '', short_length_limit: o.maxChars, measurements: compact(current), rule_based_draft: { short: draft.short, long: draft.long } }, null, 1);
+}
 function parseAi(text){
   const m = text.match(/\{[\s\S]*\}/);
   if (m){ try { const j = JSON.parse(m[0]); return { short: String(j.short || ''), long: String(j.long || ''), exclude: String(j.exclude || ''), why: String(j.why || '') }; } catch (e) {} }
-  return { short: '', long: text.trim(), exclude: '', why: 'Claude did not return structured output, so the full reply is shown under Long.' };
+  return { short: '', long: text.trim(), exclude: '', why: 'The reply was not structured JSON, so all of it is shown under Long.' };
+}
+function showAiResult(r, o){
+  $('aiShort').value = r.short; $('aiLong').value = r.long; $('aiExclude').value = r.exclude;
+  $('aiWhy').textContent = r.why ? 'Why: ' + r.why : '';
+  updCount('aiShort', 'cAiShort', o.maxChars); updCount('aiLong', 'cAiLong', 0);
+  $('aiOut').hidden = false;
+}
+
+// no-key route: copy request, paste reply
+$('copyReq').addEventListener('click', e => {
+  if (!current) return;
+  const o = opts();
+  copyText(systemPrompt(o) + "\n\n--- DATA ---\n" + userPayload(o), e.currentTarget);
+});
+$('useReply').addEventListener('click', () => {
+  const t = $('pasteReply').value.trim(), st = $('aiStatus');
+  if (!t){ st.className = 'status err'; st.textContent = 'Paste the AI reply first.'; return; }
+  showAiResult(parseAi(t), opts()); st.className = 'status'; st.textContent = 'Reply loaded.';
+});
+
+// providers with a key
+async function readJson(res){ let d = null; try { d = await res.json(); } catch (e) {} return d; }
+function errMsg(res, d){
+  let m = d && d.error && (d.error.message || (typeof d.error === 'string' ? d.error : '')) ;
+  if (!m && d && d.message) m = d.message;
+  m = m || ('HTTP ' + res.status);
+  if (res.status === 401 || res.status === 403) return 'The key was rejected (' + m + ').';
+  if (res.status === 404) return m + ' (check the model name).';
+  if (res.status === 429) return 'Rate limit or free quota reached (' + m + '). Wait a bit or try another service.';
+  return m;
+}
+async function callProvider(id, key, model, system, user){
+  if (id === 'anthropic'){
+    const res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model, max_tokens: 1200, system, messages: [{ role: 'user', content: user }] }) });
+    const d = await readJson(res); if (!res.ok) throw new Error(errMsg(res, d));
+    return (d.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+  }
+  if (id === 'gemini'){
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent', { method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ role: 'user', parts: [{ text: user }] }], generationConfig: { maxOutputTokens: 2500, responseMimeType: 'application/json' } }) });
+    const d = await readJson(res); if (!res.ok) throw new Error(errMsg(res, d));
+    const parts = d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts;
+    if (!parts) throw new Error('Gemini returned no text' + (d.promptFeedback && d.promptFeedback.blockReason ? ' (' + d.promptFeedback.blockReason + ')' : '') + '.');
+    return parts.map(p => p.text || '').join('');
+  }
+  let base = id === 'custom' ? $('baseUrl').value.trim().replace(/\/+$/, '') : PROVIDERS[id].base;
+  if (!base) throw new Error('Enter the base URL first.');
+  const headers = { 'content-type': 'application/json' }; if (key) headers.authorization = 'Bearer ' + key;
+  const res = await fetch(base + '/chat/completions', { method: 'POST', headers,
+    body: JSON.stringify({ model, max_tokens: 1200, temperature: 0.7, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] }) });
+  const d = await readJson(res); if (!res.ok) throw new Error(errMsg(res, d));
+  const c = d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content;
+  if (!c) throw new Error('The service returned no text.');
+  return c;
 }
 $('aiBtn').addEventListener('click', async () => {
   if (!current) return;
-  const key = $('apiKey').value.trim(), st = $('aiStatus');
-  if (!key){ st.textContent = 'Enter your Anthropic API key first.'; st.className = 'status err'; return; }
-  if ($('remember').checked){ lsSet('sp_remember', '1'); lsSet('sp_key', key); }
-  const o = opts(), draft = buildPrompt(current, o);
-  const payload = { generator: $('target').value, vocals: o.vocals || 'unspecified', user_notes: o.genre || '', short_length_limit: o.maxChars, measurements: compact(current), rule_based_draft: { short: draft.short, long: draft.long } };
-  $('aiBtn').disabled = true; st.className = 'status'; st.textContent = 'Asking Claude…';
+  const id = provId(), key = $('apiKey').value.trim(), model = $('model').value.trim(), st = $('aiStatus');
+  if (!key && id !== 'custom'){ st.className = 'status err'; st.textContent = 'Enter an API key first, or switch to "No key" above.'; return; }
+  if (!model){ st.className = 'status err'; st.textContent = 'Enter a model name.'; return; }
+  lsSet('sp_model_' + id, model); if (id === 'custom') lsSet('sp_base', $('baseUrl').value.trim());
+  if ($('remember').checked){ lsSet('sp_remember', '1'); lsSet('sp_key_' + id, key); }
+  const o = opts();
+  $('aiBtn').disabled = true; st.className = 'status'; st.textContent = 'Asking the AI…';
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model: $('model').value, max_tokens: 1200, system: systemPrompt(o), messages: [{ role: 'user', content: JSON.stringify(payload, null, 1) }] })
-    });
-    let data = null; try { data = await res.json(); } catch (e) {}
-    if (!res.ok){
-      const msg = data && data.error && data.error.message ? data.error.message : 'HTTP ' + res.status;
-      throw new Error(res.status === 401 ? 'The API key was rejected (' + msg + ').' : msg);
-    }
-    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
-    const r = parseAi(text);
-    $('aiShort').value = r.short; $('aiLong').value = r.long; $('aiExclude').value = r.exclude; $('aiWhy').textContent = r.why ? 'Why: ' + r.why : '';
-    updCount('aiShort', 'cAiShort', o.maxChars); updCount('aiLong', 'cAiLong', 0);
-    $('aiOut').hidden = false; st.textContent = 'Done.';
+    const text = await callProvider(id, key, model, systemPrompt(o), userPayload(o));
+    showAiResult(parseAi(text), o); st.textContent = 'Done.';
   } catch (e) {
-    const offline = e instanceof TypeError;
     st.className = 'status err';
-    st.textContent = offline ? "Couldn't reach api.anthropic.com. Check your connection and try again." : 'Claude request failed: ' + (e.message || e);
+    st.textContent = e instanceof TypeError
+      ? "Couldn't reach the service. Check your connection (or that it allows browser requests) and try again."
+      : 'Request failed: ' + (e.message || e);
   } finally { $('aiBtn').disabled = false; }
 });
 
